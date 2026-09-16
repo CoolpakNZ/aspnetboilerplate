@@ -7,6 +7,12 @@ on:
       - '**/*.cshtml'
       - '**/*.csproj'
       - '**/*.razor'
+      # The SDK now comes from global.json, and publish-packages triggers on it too.
+      # Without this an SDK-only change would publish without ever running the tests.
+      - 'global.json'
+      - 'common.props'
+      - 'Directory.Build.props'
+      - 'test/Directory.Build.props'
 
 permissions:
   contents: read
@@ -17,11 +23,11 @@ jobs:
     runs-on: windows-latest
 
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v4
     - name: Setup .NET
-      uses: actions/setup-dotnet@v3
+      uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: 9.0.100-rc.2.24474.11
+        global-json-file: global.json
     - name: Restore dependencies
       run: dotnet restore
     - name: Build

@@ -1,0 +1,90 @@
+name: Publish Abp packages
+
+# ============================================================================
+# Publishes the Coolpak fork's Abp.* packages to this organisation's GitHub
+# Packages NuGet feed.
+#
+# The fork deliberately keeps the upstream package IDs (Abp, Abp.AspNetCore, ...)
+# so consuming application code needs no change. The version carries the
+# divergence instead: <upstream base>-coolpak.<n>, e.g. 10.5.0-coolpak.1.
+# Bump the suffix in common.props for every change you want consumers to pick up.
+#
+# Because the IDs collide with the real upstream packages on nuget.org, every
+# consumer MUST use packageSourceMapping to pin Abp* to this feed. Without it a
+# restore can silently fall back to upstream and you get a .NET 9 assembly.
+#
+# Triggers:
+#   workflow_dispatch - publish from any branch, so a package can be produced for
+#                       testing before the PR is merged
+#   push to dev       - publish once the change is merged
+# ============================================================================
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [dev]
+    paths:
+      - 'src/**'
+      - 'common.props'
+      - 'global.json'
+      - '.github/workflows/publish-packages.yml'
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: publish-packages-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Pack and publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Show resolved version
+        id: version
+        run: |
+          VERSION=$(sed -n 's:.*<Version>\(.*\)</Version>.*:\1:p' common.props | head -1)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "Publishing Abp.* $VERSION"
+
+      - name: Restore
+        run: dotnet restore Abp.sln
+
+      - name: Build
+        run: dotnet build Abp.sln -c Release --no-restore
+
+      - name: Pack
+        run: dotnet pack Abp.sln -c Release --no-build -o "${{ runner.temp }}/nupkgs"
+
+      - name: List packages
+        run: ls -1 "${{ runner.temp }}/nupkgs"
+
+      # --skip-duplicate so re-running the workflow without a version bump is a
+      # no-op rather than a hard failure. GitHub Packages does not allow
+      # overwriting an existing version.
+      - name: Push to GitHub Packages
+        run: |
+          dotnet nuget push "${{ runner.temp }}/nupkgs/*.nupkg" \
+            --source https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json \
+            --api-key ${{ secrets.GITHUB_TOKEN }} \
+            --skip-duplicate
+
+      - name: Summary
+        run: |
+          echo "### Published \`Abp.*\` ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Feed: \`https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Consumers must pin this exact version and map \`Abp*\` to this feed." >> $GITHUB_STEP_SUMMARY
+          ls -1 "${{ runner.temp }}/nupkgs" | sed 's/^/- /' >> $GITHUB_STEP_SUMMARY
