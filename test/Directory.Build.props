@@ -1,0 +1,20 @@
+<Project>
+
+  <!--
+    Nothing under test/ is a shippable package. Two projects here are plain SDK library
+    projects rather than xunit projects (Microsoft.NET.Test.Sdk sets IsPackable=false for
+    the rest), so `dotnet pack Abp.sln` produced Abp.ZeroCore.SampleApp.1.0.0 and
+    AbpAspNetCoreDemo.Core.1.5.0 and the publish workflow's wildcard push would have sent
+    those sample packages to the org feed. GitHub Packages will not let you overwrite a
+    published version, so that pollution is effectively permanent.
+
+    Setting IsPackable here covers every current and future project under test/.
+  -->
+
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+</Project>

@@ -7,6 +7,12 @@ on:
       - '**/*.cshtml'
       - '**/*.csproj'
       - '**/*.razor'
+      # The SDK now comes from global.json, and publish-packages triggers on it too.
+      # Without this an SDK-only change would publish without ever running the tests.
+      - 'global.json'
+      - 'common.props'
+      - 'Directory.Build.props'
+      - 'test/Directory.Build.props'
 
 permissions:
   contents: read
